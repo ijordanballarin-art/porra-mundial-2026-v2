@@ -972,6 +972,29 @@ function calcAllPoints(participant) {
 
 // ===================== VIEWS =====================
 
+function getActiveDate() {
+  const results = getResults();
+  const byDate = {};
+  MATCHES.forEach(function(m) {
+    if (!byDate[m.date]) byDate[m.date] = [];
+    byDate[m.date].push(m);
+  });
+  var sortedDates = Object.keys(byDate).sort();
+  // First date with any unplayed match
+  for (var i = 0; i < sortedDates.length; i++) {
+    var dd = sortedDates[i];
+    var hasUnplayed = byDate[dd].some(function(m) { return !results[m.id]; });
+    if (hasUnplayed) return dd;
+  }
+  // Fallback: last date with played matches
+  for (var j = sortedDates.length - 1; j >= 0; j--) {
+    var dd2 = sortedDates[j];
+    var hasPlayed = byDate[dd2].some(function(m) { return !!results[m.id]; });
+    if (hasPlayed) return dd2;
+  }
+  return sortedDates[0] || null;
+}
+
 function showView(v) {
   ['ranking','partidos','grupos','eliminatorias','participante'].forEach(n => {
     document.getElementById('view-'+n).classList.toggle('hidden', n !== v);
@@ -1051,26 +1074,7 @@ function renderPartidos() {
 
   const played = Object.keys(results).length;
 
-  // Find the "active" date: the date that has the next unplayed match
-  // (or the last date with played matches if all done)
-  var activeDate = null;
-  var sortedDates = Object.keys(byDate).sort();
-  for (var di = 0; di < sortedDates.length; di++) {
-    var dd = sortedDates[di];
-    var hasUnplayed = byDate[dd].some(function(m) { return !results[m.id]; });
-    if (hasUnplayed) {
-      activeDate = dd;
-      break;
-    }
-  }
-  // Fallback: last date that has any played match
-  if (!activeDate) {
-    for (var di2 = sortedDates.length - 1; di2 >= 0; di2--) {
-      var dd2 = sortedDates[di2];
-      var hasPlayed = byDate[dd2].some(function(m) { return !!results[m.id]; });
-      if (hasPlayed) { activeDate = dd2; break; }
-    }
-  }
+  var activeDate = getActiveDate();
 
   let html = '<div class="section-title">⚽ Todos los Partidos</div>';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">'
@@ -1083,11 +1087,7 @@ function renderPartidos() {
   Object.keys(byDate).sort().forEach(function(date) {
     const d = new Date(date + 'T12:00:00');
     const dayStr = d.toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
-    var isActive = (date === activeDate);
-    var dayId = 'day-' + date.replace(/-/g,'');
-    html += '<div class="day-group" id="' + dayId + '">'
-      + '<div class="day-header" style="' + (isActive ? 'color:#000;background:var(--gold);' : '') + '">'
-      + (isActive ? '📍 ' : '') + dayStr + '</div>';
+    html += '<div class="day-group"><div class="day-header">' + dayStr + '</div>';
 
     byDate[date].forEach(function(m) {
       const r = results[m.id];
@@ -1278,11 +1278,7 @@ function renderParticipante(p) {
   Object.keys(byDate).sort().forEach(function(date) {
     const d = new Date(date + 'T12:00:00');
     const dayStr = d.toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
-    var isActive = (date === activeDate);
-    var dayId = 'day-' + date.replace(/-/g,'');
-    html += '<div class="day-group" id="' + dayId + '">'
-      + '<div class="day-header" style="' + (isActive ? 'color:#000;background:var(--gold);' : '') + '">'
-      + (isActive ? '📍 ' : '') + dayStr + '</div>';
+    html += '<div class="day-group"><div class="day-header">' + dayStr + '</div>';
 
     byDate[date].forEach(function(m) {
       const pred = PREDICTIONS[currentParticipant][m.id];
