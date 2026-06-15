@@ -1050,14 +1050,44 @@ function renderPartidos() {
   });
 
   const played = Object.keys(results).length;
+
+  // Find the "active" date: the date that has the next unplayed match
+  // (or the last date with played matches if all done)
+  var activeDate = null;
+  var sortedDates = Object.keys(byDate).sort();
+  for (var di = 0; di < sortedDates.length; di++) {
+    var dd = sortedDates[di];
+    var hasUnplayed = byDate[dd].some(function(m) { return !results[m.id]; });
+    if (hasUnplayed) {
+      activeDate = dd;
+      break;
+    }
+  }
+  // Fallback: last date that has any played match
+  if (!activeDate) {
+    for (var di2 = sortedDates.length - 1; di2 >= 0; di2--) {
+      var dd2 = sortedDates[di2];
+      var hasPlayed = byDate[dd2].some(function(m) { return !!results[m.id]; });
+      if (hasPlayed) { activeDate = dd2; break; }
+    }
+  }
+
   let html = '<div class="section-title">⚽ Todos los Partidos</div>';
-  html += '<div style="color:var(--text3);font-size:12px;margin-bottom:16px;">'
-        + played + ' partidos con resultado · Actualización automática cada 2 min</div>';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">'
+        + '<span style="color:var(--text3);font-size:12px">' + played + ' partidos jugados · Actualización cada 2 min</span>'
+        + '<button onclick="scrollToActive()" style="background:var(--gold);color:#000;border:none;border-radius:8px;'
+        + 'padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;'
+        + 'display:flex;align-items:center;gap:6px;">📍 Ir a hoy</button>'
+        + '</div>';
 
   Object.keys(byDate).sort().forEach(function(date) {
     const d = new Date(date + 'T12:00:00');
     const dayStr = d.toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
-    html += '<div class="day-group"><div class="day-header">' + dayStr + '</div>';
+    var isActive = (date === activeDate);
+    var dayId = 'day-' + date.replace(/-/g,'');
+    html += '<div class="day-group" id="' + dayId + '">'
+      + '<div class="day-header" style="' + (isActive ? 'color:#000;background:var(--gold);' : '') + '">'
+      + (isActive ? '📍 ' : '') + dayStr + '</div>';
 
     byDate[date].forEach(function(m) {
       const r = results[m.id];
@@ -1248,7 +1278,11 @@ function renderParticipante(p) {
   Object.keys(byDate).sort().forEach(function(date) {
     const d = new Date(date + 'T12:00:00');
     const dayStr = d.toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
-    html += '<div class="day-group"><div class="day-header">' + dayStr + '</div>';
+    var isActive = (date === activeDate);
+    var dayId = 'day-' + date.replace(/-/g,'');
+    html += '<div class="day-group" id="' + dayId + '">'
+      + '<div class="day-header" style="' + (isActive ? 'color:#000;background:var(--gold);' : '') + '">'
+      + (isActive ? '📍 ' : '') + dayStr + '</div>';
 
     byDate[date].forEach(function(m) {
       const pred = PREDICTIONS[currentParticipant][m.id];
@@ -1303,6 +1337,16 @@ function renderParticipante(p) {
 
   el.innerHTML = html;
 }
+function scrollToActive() {
+  // Find the active date element and scroll to it
+  var active = document.querySelector('.day-group [style*="color:#000"]');
+  if (!active) active = document.querySelector('.day-group');
+  if (active) {
+    var card = active.closest('.day-group') || active.parentElement;
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
 // Init
 renderRanking();
 startAutoRefresh();
