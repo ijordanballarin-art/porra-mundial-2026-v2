@@ -498,9 +498,9 @@
 <div class="nav">
   <button class="nav-btn active" onclick="showView('ranking')">🏅 Clasificación</button>
   <button class="nav-btn" onclick="showView('partidos')">⚽ Partidos</button>
-  <button class="nav-btn" onclick="showView('grupos')">🗂️ Por Grupos</button>
   <button class="nav-btn" onclick="showView('eliminatorias')">🔱 Eliminatorias</button>
   <button class="nav-btn" onclick="showView('participante')">👤 Por Participante</button>
+  <button class="nav-btn" onclick="showView('grupos')">🗂️ Por Grupos</button>
 </div>
 
 <div class="main">
@@ -1212,31 +1212,33 @@ function renderParticipante(p) {
   const results = getResults();
   const s = calcAllPoints(currentParticipant);
 
-  let html = `<div class="section-title">👤 Por Participante</div>`;
-  html += `<div class="participant-selector">`;
-  PARTICIPANTS.forEach(name => {
+  const phaseLabel = {
+    'A':'Gr. A','B':'Gr. B','C':'Gr. C','D':'Gr. D',
+    'E':'Gr. E','F':'Gr. F','G':'Gr. G','H':'Gr. H',
+    'I':'Gr. I','J':'Gr. J','K':'Gr. K','L':'Gr. L',
+    '16avos':'1/16','Octavos':'Octavos','Cuartos':'Cuartos',
+    'Semifinales':'Semis','Tercer puesto':'3er Puesto','Final':'FINAL'
+  };
+
+  let html = '<div class="section-title">👤 Por Participante</div>';
+
+  // Participant selector
+  html += '<div class="participant-selector">';
+  PARTICIPANTS.forEach(function(name) {
     const activeClass = name === currentParticipant ? 'active' : '';
     html += '<button class="part-btn ' + activeClass + '" onclick="renderParticipante(\'' + name + '\')">' + name + '</button>';
   });
-  html += `</div>`;
+  html += '</div>';
 
-  html += `<div class="stats-grid">
-    <div class="stat-card"><div class="stat-val">${s.total}</div><div class="stat-label">Puntos totales</div></div>
-    <div class="stat-card"><div class="stat-val" style="color:var(--gold)">${s.exact}</div><div class="stat-label">Marcador exacto</div></div>
-    <div class="stat-card"><div class="stat-val" style="color:var(--green)">${s.winner}</div><div class="stat-label">Ganador correcto</div></div>
-    <div class="stat-card"><div class="stat-val" style="color:var(--text3)">${Object.keys(results).length}</div><div class="stat-label">Partidos jugados</div></div>
-  </div>`;
+  // Stats cards
+  html += '<div class="stats-grid">'
+    + '<div class="stat-card"><div class="stat-val">' + s.total + '</div><div class="stat-label">Puntos</div></div>'
+    + '<div class="stat-card"><div class="stat-val" style="color:var(--gold)">⭐ ' + s.exact + '</div><div class="stat-label">Exactos</div></div>'
+    + '<div class="stat-card"><div class="stat-val" style="color:var(--green)">✅ ' + s.winner + '</div><div class="stat-label">Ganador</div></div>'
+    + '<div class="stat-card"><div class="stat-val" style="color:var(--text3)">' + Object.keys(results).length + '</div><div class="stat-label">Jugados</div></div>'
+    + '</div>';
 
-  // All matches in chronological order
-  const phaseLabel = {
-    'A':'Grupo A','B':'Grupo B','C':'Grupo C','D':'Grupo D',
-    'E':'Grupo E','F':'Grupo F','G':'Grupo G','H':'Grupo H',
-    'I':'Grupo I','J':'Grupo J','K':'Grupo K','L':'Grupo L',
-    '16avos':'Dieciseisavos','Octavos':'Octavos','Cuartos':'Cuartos',
-    'Semifinales':'Semifinales','Tercer puesto':'Tercer Puesto','Final':'FINAL'
-  };
-
-  // Group by date (chronological)
+  // Matches chronologically
   const byDate = {};
   MATCHES.forEach(function(m) {
     if (!byDate[m.date]) byDate[m.date] = [];
@@ -1246,8 +1248,7 @@ function renderParticipante(p) {
   Object.keys(byDate).sort().forEach(function(date) {
     const d = new Date(date + 'T12:00:00');
     const dayStr = d.toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});
-    html += '<div class="day-group" style="margin-bottom:16px">';
-    html += '<div class="day-header">' + dayStr + '</div>';
+    html += '<div class="day-group"><div class="day-header">' + dayStr + '</div>';
 
     byDate[date].forEach(function(m) {
       const pred = PREDICTIONS[currentParticipant][m.id];
@@ -1262,21 +1263,39 @@ function renderParticipante(p) {
         else icon = '❌';
       }
 
-      var realStr = rStr || '<span style="color:var(--text3)">—</span>';
-      var predClass = 'pred-cell ' + calc.status;
-      var ptsHtml = rStr
-        ? '<span class="badge badge-' + (calc.status === 'exact' ? 'exact' : calc.status === 'winner' ? 'winner' : 'wrong') + '">' + calc.pts + 'pts</span>'
-        : '—';
-      var groupStr = '<span style="color:var(--text3);font-size:10px">' + (phaseLabel[m.group] || m.group) + '</span>';
+      var statusColor = calc.status === 'exact' ? 'var(--gold)'
+        : calc.status === 'winner' ? 'var(--green)'
+        : calc.status === 'wrong' ? 'var(--red)'
+        : 'var(--text3)';
 
-      html += '<div style="display:grid;grid-template-columns:50px 1fr 80px 90px 60px 50px;align-items:center;gap:8px;'
-        + 'padding:10px 16px;border:1px solid var(--border);border-top:none;background:var(--bg2);font-size:13px;">'
-        + '<span style="color:var(--gold);font-size:10px;font-weight:700">' + m.id + '</span>'
-        + '<span style="font-weight:500">' + m.home + ' vs ' + m.away + ' ' + groupStr + '</span>'
-        + '<span style="monospace;font-size:16px;font-weight:700ext-align:center">' + realStr + '</span>'
-        + '<span class="' + predClass + '" style="text-align:center;font-size:13px">' + (pred || '—') + '</span>'
-        + '<span style="text-align:center">' + ptsHtml + '</span>'
-        + '<span style="text-align:center;font-size:16px">' + icon + '</span>'
+      var ptsStr = (rStr && pred) ? calc.pts + ' pts' : '—';
+      var phaseTxt = phaseLabel[m.group] || m.group;
+
+      html += '<div style="display:flex;align-items:center;gap:10px;'
+        + 'padding:10px 14px;border:1px solid var(--border);border-top:none;'
+        + 'background:var(--bg2);flex-wrap:wrap;">'
+
+        // Left: match info
+        + '<div style="min-width:90px;flex:2">'
+        +   '<div style="font-weight:600;font-size:13px">' + m.home + ' vs ' + m.away + '</div>'
+        +   '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + m.id + ' · ' + m.time + 'h · ' + phaseTxt + '</div>'
+        + '</div>'
+
+        // Center: real result
+        + '<div style="min-width:50px;text-align:center">'
+        +   '<div style="font-size:10px;color:var(--text3);margin-bottom:2px">Real</div>'
+        +   '<div style="font-size:16px;font-weight:700">' + (rStr || '<span style="color:var(--text3)">—</span>') + '</div>'
+        + '</div>'
+
+        // Right: prediction + icon + pts
+        + '<div style="min-width:70px;text-align:center">'
+        +   '<div style="font-size:10px;color:var(--text3);margin-bottom:2px">Mi pred.</div>'
+        +   '<div style="font-size:15px;font-weight:700;color:' + statusColor + '">'
+        +     icon + ' ' + (pred || '—')
+        +   '</div>'
+        +   '<div style="font-size:11px;font-weight:700;color:' + statusColor + '">' + ptsStr + '</div>'
+        + '</div>'
+
         + '</div>';
     });
     html += '</div>';
@@ -1284,29 +1303,6 @@ function renderParticipante(p) {
 
   el.innerHTML = html;
 }
-
-function saveMatchResult(matchId) {
-  const h = document.getElementById('h_'+matchId);
-  const a = document.getElementById('a_'+matchId);
-  if (!h || !a) return;
-  const hv = h.value.trim();
-  const av = a.value.trim();
-  if (hv === '' || av === '') { showToast('Introduce ambos goles', false); return; }
-  saveResult(matchId, parseInt(hv), parseInt(av));
-  showToast('✓ Resultado guardado');
-  renderPartidos();
-  // Also re-render ranking if visible
-  if (!document.getElementById('view-ranking').classList.contains('hidden')) renderRanking();
-}
-
-function showToast(msg, ok = true) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.background = ok ? 'var(--green)' : 'var(--red)';
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
 // Init
 renderRanking();
 startAutoRefresh();
