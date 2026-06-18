@@ -812,9 +812,9 @@ const EMBEDDED_RESULTS = {"M1": {"home": 2, "away": 0}, "M2": {"home": 2, "away"
 
 // Google Apps Script proxy URL (set this once you deploy the script)
 // Leave empty to use only embedded results
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjWFjEKZJST8hmIAtUclTnogFYd0Qx8xFSR92Xn9e66A63ty2TJymBMz82ypHNa9BK/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzN05R01jaDNxlF1hwU3GmWDAwlvsvB03Q4nk7SDxuWaMv_fbyAdO5Ly6DBPVKlFMU4/exec';
 
-const SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSpXhE2DgHj3wFV2eD4Mzn08KUUwTHTbKeJci1ZdKk7gmGuWBN0nNUdoi8iEA-ZSW519hZdY6CghK-_/pub?output=csv';
+const SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSpXhE2DgHj3wFV2eD4Mzn08KUUwTHTbKeJci1ZdKk7gmGuWBN0nNUdoi8iEA-ZSW519hZdY6CghK-_/pub?output=csv&gid=0';
 
 let lastSyncTime = null;
 let isSyncing = false;
@@ -835,35 +835,81 @@ function saveResultLocal(matchId, home, away) {
   } catch {}
 }
 
+// ===================== JSONP helper =====================
+function fetchJSONP(url) {
+  return new Promise(function(resolve, reject) {
+    const cbName = 'porra_cb_' + Date.now();
+    const script = document.createElement('script');
+    const timeout = setTimeout(function() {
+      cleanup();
+      reject(new Error('JSONP timeout'));
+    }, 8000);
+    function cleanup() {
+      clearTimeout(timeout);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+    window[cbName] = function(data) {
+      cleanup();
+      resolve(data);
+    };
+    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
+    script.onerror = function() { cleanup(); reject(new Error('JSONP load error')); };
+    document.head.appendChild(script);
+  });
+}
+
 // ===================== SHEETS FETCH =====================
 async function fetchSheetResults() {
   if (isSyncing) return;
   isSyncing = true;
   updateSyncBadge('syncing');
 
-  // If Apps Script proxy is configured, try it
+  // 1) Try Apps Script via JSONP (bypasses CORS completely)
   if (APPS_SCRIPT_URL) {
     try {
-      const resp = await fetch(APPS_SCRIPT_URL, { cache: 'no-store' });
+      const data = await fetchJSONP(APPS_SCRIPT_URL);
+      if (data && typeof data === 'object' && !data.error) {
+        const local = JSON.parse(localStorage.getItem('porra_results') || '{}');
+        Object.assign(local, data);
+        localStorage.setItem('porra_results', JSON.stringify(local));
+        lastSyncTime = new Date();
+        updateSyncBadge('ok');
+        refreshActiveView();
+        isSyncing = false;
+        return;
+      }
+    } catch (e) {
+      console.warn('Apps Script JSONP failed:', e.message);
+    }
+  }
+
+  // 2) Try CORS proxies to fetch the CSV directly
+  const proxies = [
+    csv => `https://corsproxy.io/?${encodeURIComponent(csv)}`,
+    csv => `https://api.allorigins.win/raw?url=${encodeURIComponent(csv)}`,
+  ];
+
+  for (const makeUrl of proxies) {
+    try {
+      const url = makeUrl(SHEETS_CSV_URL);
+      const resp = await fetch(url, { cache: 'no-store' });
       if (resp.ok) {
-        const data = await resp.json();
-        if (data && typeof data === 'object') {
-          const local = JSON.parse(localStorage.getItem('porra_results') || '{}');
-          Object.assign(local, data);
-          localStorage.setItem('porra_results', JSON.stringify(local));
+        const csv = await resp.text();
+        if (csv && csv.length > 10 && csv.includes(',')) {
+          processCSV(csv);
           lastSyncTime = new Date();
           updateSyncBadge('ok');
-          refreshActiveView();
           isSyncing = false;
           return;
         }
       }
     } catch (e) {
-      console.warn('Apps Script fetch failed:', e.message);
+      console.warn('Proxy fetch failed:', e.message);
     }
   }
 
-  // No live sync available — show embedded data timestamp
+  // 3) No live sync available — show embedded data
   lastSyncTime = new Date();
   updateSyncBadge('embedded');
   isSyncing = false;
